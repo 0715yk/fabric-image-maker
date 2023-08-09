@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-require("./style.css");
 var fabric_1 = require("fabric");
 var inpainter = (function () {
     var canvas = null;

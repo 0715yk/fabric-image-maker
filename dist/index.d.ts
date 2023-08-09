@@ -1,4 +1,3 @@
-import "./style.css";
 import { fabric } from "fabric";
 declare const inpainter: {
     createBaseCanvas(id: string): fabric.Canvas | null;
