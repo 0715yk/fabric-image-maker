@@ -1,6 +1,6 @@
 {
   "name": "fabric-image-maker",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "for making stacking images and getting masked canvas easy",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
