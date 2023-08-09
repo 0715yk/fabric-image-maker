@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha --reporter spec",
     "build": "tsc"
   },
   "repository": {
@@ -20,6 +20,8 @@
   "homepage": "https://github.com/0715yk/fabric-image-maker#readme",
   "devDependencies": {
     "@types/fabric": "^5.3.3",
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
     "typescript": "^5.1.6"
   },
   "dependencies": {

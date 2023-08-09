@@ -1,5 +1,8 @@
 import { fabric } from "fabric";
 
+// "test": "echo \"Error: no test specified\" && exit 1",
+// "dev": "vite",
+
 const inpainter = (function () {
   let canvas = null as null | fabric.Canvas;
   let selectedObject = null as null | fabric.Image;
