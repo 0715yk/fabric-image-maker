@@ -1,4 +1,3 @@
-import "./style.css";
 import { fabric } from "fabric";
 
 const inpainter = (function () {
@@ -21,7 +20,7 @@ const inpainter = (function () {
     },
     addImageLayer(src: string) {
       (function () {
-        fabric.Image.fromURL(src, function (oImg) {
+        fabric.Image.fromURL(src, function (oImg: fabric.Image) {
           if (canvas !== null) {
             oImg.set("left", 0).set("top", 0);
             oImg.on("selected", function () {

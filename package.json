@@ -1,0 +1,28 @@
+{
+  "name": "fabric-image-maker",
+  "version": "0.0.2",
+  "description": "for making stacking images and getting masked canvas easy",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0715yk/fabric-image-maker.git"
+  },
+  "author": "bravehong",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/0715yk/fabric-image-maker/issues"
+  },
+  "homepage": "https://github.com/0715yk/fabric-image-maker#readme",
+  "devDependencies": {
+    "@types/fabric": "^5.3.3",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "fabric": "^5.3.0"
+  }
+}
