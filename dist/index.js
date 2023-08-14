@@ -2,67 +2,215 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var fabric_1 = require("fabric");
 var inpainter = (function () {
-  var canvas = null;
-  var selectedObject = null;
-  return {
-    createBaseCanvas: function (id) {
-      try {
-        canvas = new fabric_1.fabric.Canvas(id, {
-          backgroundColor: "green",
-          preserveObjectStacking: true,
-        });
-        return canvas;
-      } catch (e) {
-        console.error(e);
-        return null;
-      }
-    },
-    addImageLayer: function (src) {
-      (function () {
-        fabric_1.fabric.Image.fromURL(src, function (oImg) {
-          if (canvas !== null) {
-            oImg.set("left", 0).set("top", 0);
-            oImg.on("selected", function () {
-              selectedObject = oImg;
-            });
-            canvas.add(oImg);
-          }
-        });
-      })();
-    },
-    bringForward: function () {
-      if (selectedObject !== null && canvas !== null) {
-        canvas.bringForward(selectedObject);
-      }
-    },
-    bringToFront: function () {
-      if (selectedObject !== null && canvas !== null) {
-        canvas.bringToFront(selectedObject);
-      }
-    },
-    canvasToDataUrl: function () {
-      if (canvas !== null) {
-        var pngURL = canvas.toDataURL();
-        return pngURL;
-      } else {
-        return "";
-      }
-    },
-  };
+    var imageStackCanvas = null;
+    var drawingCanvas = {
+        context: null,
+        canvas: null,
+        color: "#FFFFFF",
+        strokeWidth: 15,
+    };
+    var selectedImage = null;
+    return {
+        createDrawingCanvas: function (id) {
+            var latestPoint = [0, 0];
+            var drawing = false;
+            var canvas = document.querySelector(id);
+            if (canvas !== null) {
+                var context_1 = canvas.getContext("2d");
+                if (context_1 !== null) {
+                    drawingCanvas.context = context_1;
+                    drawingCanvas.canvas = canvas;
+                    var continueStroke_1 = function (newPoint) {
+                        context_1.beginPath();
+                        context_1.moveTo(latestPoint[0], latestPoint[1]);
+                        context_1.strokeStyle = drawingCanvas.color;
+                        context_1.lineWidth = drawingCanvas.strokeWidth;
+                        context_1.lineCap = "round";
+                        context_1.lineJoin = "round";
+                        context_1.lineTo(newPoint[0], newPoint[1]);
+                        context_1.stroke();
+                        latestPoint = newPoint;
+                    };
+                    // Event helpers
+                    var startStroke_1 = function (point) {
+                        drawing = true;
+                        latestPoint = point;
+                    };
+                    // Event handlers
+                    var mouseMove_1 = function (evt) {
+                        if (!drawing) {
+                            return;
+                        }
+                        continueStroke_1([
+                            evt.offsetX,
+                            evt.offsetY,
+                        ]);
+                    };
+                    var mouseDown_1 = function (evt) {
+                        if (drawing) {
+                            return;
+                        }
+                        evt.preventDefault();
+                        canvas.addEventListener("mousemove", mouseMove_1, false);
+                        startStroke_1([evt.offsetX, evt.offsetY]);
+                    };
+                    var mouseEnter = function (evt) {
+                        if (!drawing) {
+                            return;
+                        }
+                        mouseDown_1(evt);
+                    };
+                    var endStroke = function (evt) {
+                        if (!drawing) {
+                            return;
+                        }
+                        drawing = false;
+                        if (evt.currentTarget !== null) {
+                            evt.currentTarget.removeEventListener("mousemove", mouseMove_1, false);
+                        }
+                    };
+                    // event listeners
+                    canvas.addEventListener("mousedown", mouseDown_1, false);
+                    canvas.addEventListener("mouseup", endStroke, false);
+                    canvas.addEventListener("mouseout", endStroke, false);
+                    canvas.addEventListener("mouseenter", mouseEnter, false);
+                    return { canvas: canvas, context: context_1 };
+                }
+                else {
+                    return { canvas: null, context: null };
+                }
+            }
+            return { canvas: null, context: null };
+        },
+        setDrawingMode: function (mode) {
+            if (drawingCanvas.context !== null) {
+                drawingCanvas.context.globalCompositeOperation =
+                    mode === "brush" ? "source-over" : "destination-out";
+            }
+        },
+        setStrokeWidth: function (width) {
+            drawingCanvas.strokeWidth = width;
+        },
+        setBrushColor: function (color) {
+            drawingCanvas.color = color;
+        },
+        createImageCanvas: function (_a) {
+            var id = _a.id, width = _a.width, height = _a.height, backgroundColor = _a.backgroundColor;
+            try {
+                imageStackCanvas = new fabric_1.fabric.Canvas(id, {
+                    backgroundColor: backgroundColor,
+                    preserveObjectStacking: true,
+                });
+                imageStackCanvas.setWidth(width);
+                imageStackCanvas.setHeight(height);
+                return imageStackCanvas;
+            }
+            catch (e) {
+                console.error(e);
+                return null;
+            }
+        },
+        addImageLayer: function (src) {
+            (function () {
+                fabric_1.fabric.Image.fromURL(src, function (oImg) {
+                    if (imageStackCanvas !== null) {
+                        oImg.set("left", 0).set("top", 0);
+                        oImg.on("selected", function () {
+                            selectedImage = oImg;
+                        });
+                        imageStackCanvas.add(oImg);
+                    }
+                });
+            })();
+        },
+        bringForward: function () {
+            if (selectedImage !== null && imageStackCanvas !== null) {
+                imageStackCanvas.bringForward(selectedImage);
+            }
+        },
+        bringToFront: function () {
+            if (selectedImage !== null && imageStackCanvas !== null) {
+                imageStackCanvas.bringToFront(selectedImage);
+            }
+        },
+        bringBack: function () {
+            if (selectedImage !== null && imageStackCanvas !== null) {
+                imageStackCanvas.sendToBack(selectedImage);
+            }
+        },
+        bringToBackward: function () {
+            if (selectedImage !== null && imageStackCanvas !== null) {
+                imageStackCanvas.sendBackwards(selectedImage);
+            }
+        },
+        deleteImage: function () {
+            if (selectedImage !== null && imageStackCanvas !== null) {
+                imageStackCanvas.remove(selectedImage);
+            }
+        },
+        cloneCanvas: function (oldCanvas) {
+            var newCanvas = document.createElement("canvas");
+            var context = newCanvas.getContext("2d");
+            newCanvas.width = oldCanvas.width;
+            newCanvas.height = oldCanvas.height;
+            if (context !== null) {
+                context.drawImage(oldCanvas, 0, 0);
+            }
+            return { canvas: newCanvas, context: context };
+        },
+        canvasToDataUrl: function (type) {
+            if (type === "image") {
+                if (imageStackCanvas !== null) {
+                    var pngURL = imageStackCanvas.toDataURL();
+                    return pngURL;
+                }
+                else {
+                    return "";
+                }
+            }
+            else if (type === "mask") {
+                if (drawingCanvas.canvas !== null && drawingCanvas.context !== null) {
+                    var _a = this.cloneCanvas(drawingCanvas.canvas), canvas = _a.canvas, context = _a.context;
+                    if (context !== null) {
+                        context.globalCompositeOperation = "destination-over";
+                        context.fillStyle = "black";
+                        context.fillRect(0, 0, drawingCanvas.canvas.width, drawingCanvas.canvas.height);
+                        var pngURL = canvas.toDataURL();
+                        return pngURL;
+                    }
+                    else {
+                        return "";
+                    }
+                }
+                else {
+                    return "";
+                }
+            }
+            else {
+                return "";
+            }
+        },
+        dataURItoBlob: function (dataURI) {
+            var byteString = window.atob(dataURI.split(",")[1]);
+            var mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
+            var ab = new ArrayBuffer(byteString.length);
+            var ia = new Uint8Array(ab);
+            for (var i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            var bb = new Blob([ab], { type: mimeString });
+            return bb;
+        },
+        imageCanvasToBlob: function () {
+            var dataURI = this.canvasToDataUrl("image");
+            var blob = this.dataURItoBlob(dataURI);
+            return blob;
+        },
+        drawingCanvasToBlob: function () {
+            var dataURI = this.canvasToDataUrl("mask");
+            var blob = this.dataURItoBlob(dataURI);
+            return blob;
+        },
+    };
 })();
 exports.default = inpainter;
-// 1) stage를 만든다.
-// 2) 이미지를 업로드하면 새로운 레이어를 만든다.
-// 3) 이미지를 업로드하면 새로운 레이어를 만든다,,, X N번
-// 4) 최상단에는 마스킹 용 레이어가 있다(default)
-// 5) 이 뒤에 canvas 크기는 고정인지 아니면 상대적으로 더큰 이미지가 기준이 되는지?
-
-// 추가할 기능
-// - 마스킹 부분 적용 및 따로 추출할 수 있도록 만들기
-// - 모든 메서드에는 return 값이 임의로라도 있어야한다(비동기 처리인 것 같아서 여기에 대한 고려도 필요).
-// - testing code 작성
-
-// 궁금한 점
-// - 이 뒤에 canvas 크기는 고정인지 아니면 상대적으로 더큰 이미지가 기준이 되는지?
-// - 마스킹은 그림 그리는 정도로 처리하면 되는지?(brush 크기 조절 기능?)
-// - 최종적으로 canvas의 이미지를 추출하고, masking layer도 이미지로 추출하면 되는지? 데이터 타입은 뭐로 주면 되는지?
