@@ -1,21 +1,133 @@
 import { fabric } from "fabric";
 
-// "test": "echo \"Error: no test specified\" && exit 1",
-// "dev": "vite",
-
 const inpainter = (function () {
-  let canvas = null as null | fabric.Canvas;
-  let selectedObject = null as null | fabric.Image;
+  let imageStackCanvas = null as null | fabric.Canvas;
+  let drawingCanvas = {
+    context: null as null | CanvasRenderingContext2D,
+    canvas: null as null | HTMLCanvasElement,
+    color: "#FFFFFF",
+    strokeWidth: 15,
+  };
+  let selectedImage = null as null | fabric.Image;
 
   return {
-    createBaseCanvas(id: string) {
+    createDrawingCanvas(id: string) {
+      let latestPoint = [0, 0];
+      let drawing = false;
+      const canvas = document.querySelector(id) as HTMLCanvasElement;
+      if (canvas !== null) {
+        const context = canvas.getContext("2d");
+
+        if (context !== null) {
+          drawingCanvas.context = context;
+          drawingCanvas.canvas = canvas;
+          const continueStroke = (newPoint: number[]) => {
+            context.beginPath();
+            context.moveTo(latestPoint[0], latestPoint[1]);
+            context.strokeStyle = drawingCanvas.color;
+            context.lineWidth = drawingCanvas.strokeWidth;
+            context.lineCap = "round";
+            context.lineJoin = "round";
+            context.lineTo(newPoint[0], newPoint[1]);
+            context.stroke();
+
+            latestPoint = newPoint;
+          };
+
+          // Event helpers
+
+          const startStroke = (point: number[]) => {
+            drawing = true;
+            latestPoint = point;
+          };
+
+          // Event handlers
+
+          const mouseMove = (evt: Event) => {
+            if (!drawing) {
+              return;
+            }
+
+            continueStroke([
+              (<MouseEvent>evt).offsetX,
+              (<MouseEvent>evt).offsetY,
+            ]);
+          };
+
+          const mouseDown = (evt: MouseEvent) => {
+            if (drawing) {
+              return;
+            }
+            evt.preventDefault();
+            canvas.addEventListener("mousemove", mouseMove, false);
+            startStroke([evt.offsetX, evt.offsetY]);
+          };
+
+          const mouseEnter = (evt: MouseEvent) => {
+            if (!drawing) {
+              return;
+            }
+            mouseDown(evt);
+          };
+
+          const endStroke = (evt: MouseEvent) => {
+            if (!drawing) {
+              return;
+            }
+            drawing = false;
+            if (evt.currentTarget !== null) {
+              evt.currentTarget.removeEventListener(
+                "mousemove",
+                mouseMove,
+                false
+              );
+            }
+          };
+
+          // event listeners
+          canvas.addEventListener("mousedown", mouseDown, false);
+          canvas.addEventListener("mouseup", endStroke, false);
+          canvas.addEventListener("mouseout", endStroke, false);
+          canvas.addEventListener("mouseenter", mouseEnter, false);
+
+          return { canvas, context };
+        } else {
+          return { canvas: null, context: null };
+        }
+      }
+      return { canvas: null, context: null };
+    },
+    setDrawingMode(mode: string) {
+      if (drawingCanvas.context !== null) {
+        drawingCanvas.context.globalCompositeOperation =
+          mode === "brush" ? "source-over" : "destination-out";
+      }
+    },
+    setStrokeWidth(width: number) {
+      drawingCanvas.strokeWidth = width;
+    },
+    setBrushColor(color: string) {
+      drawingCanvas.color = color;
+    },
+    createImageCanvas({
+      id,
+      width,
+      height,
+      backgroundColor,
+    }: {
+      id: string;
+      width: number;
+      height: number;
+      backgroundColor: string;
+    }) {
       try {
-        canvas = new fabric.Canvas(id, {
-          backgroundColor: "green",
+        imageStackCanvas = new fabric.Canvas(id, {
+          backgroundColor: backgroundColor,
           preserveObjectStacking: true,
         });
-
-        return canvas;
+        imageStackCanvas.setWidth(width);
+        imageStackCanvas.setHeight(height);
+        return imageStackCanvas;
       } catch (e) {
         console.error(e);
         return null;
@@ -24,50 +136,109 @@ const inpainter = (function () {
     addImageLayer(src: string) {
       (function () {
         fabric.Image.fromURL(src, function (oImg: fabric.Image) {
-          if (canvas !== null) {
+          if (imageStackCanvas !== null) {
             oImg.set("left", 0).set("top", 0);
             oImg.on("selected", function () {
-              selectedObject = oImg;
+              selectedImage = oImg;
             });
-            canvas.add(oImg);
+            imageStackCanvas.add(oImg);
           }
         });
       })();
     },
     bringForward() {
-      if (selectedObject !== null && canvas !== null) {
-        canvas.bringForward(selectedObject);
+      if (selectedImage !== null && imageStackCanvas !== null) {
+        imageStackCanvas.bringForward(selectedImage);
       }
     },
     bringToFront() {
-      if (selectedObject !== null && canvas !== null) {
-        canvas.bringToFront(selectedObject);
+      if (selectedImage !== null && imageStackCanvas !== null) {
+        imageStackCanvas.bringToFront(selectedImage);
       }
     },
-    canvasToDataUrl() {
-      if (canvas !== null) {
-        const pngURL = canvas.toDataURL();
-        return pngURL;
+    bringBack() {
+      if (selectedImage !== null && imageStackCanvas !== null) {
+        imageStackCanvas.sendToBack(selectedImage);
+      }
+    },
+    bringToBackward() {
+      if (selectedImage !== null && imageStackCanvas !== null) {
+        imageStackCanvas.sendBackwards(selectedImage);
+      }
+    },
+    deleteImage() {
+      if (selectedImage !== null && imageStackCanvas !== null) {
+        imageStackCanvas.remove(selectedImage);
+      }
+    },
+    cloneCanvas(oldCanvas: HTMLCanvasElement) {
+      const newCanvas = document.createElement("canvas");
+      const context = newCanvas.getContext("2d");
+
+      newCanvas.width = oldCanvas.width;
+      newCanvas.height = oldCanvas.height;
+
+      if (context !== null) {
+        context.drawImage(oldCanvas, 0, 0);
+      }
+
+      return { canvas: newCanvas, context };
+    },
+    canvasToDataUrl(type: string) {
+      if (type === "image") {
+        if (imageStackCanvas !== null) {
+          const pngURL = imageStackCanvas.toDataURL();
+          return pngURL;
+        } else {
+          return "";
+        }
+      } else if (type === "mask") {
+        if (drawingCanvas.canvas !== null && drawingCanvas.context !== null) {
+          const { canvas, context } = this.cloneCanvas(drawingCanvas.canvas);
+          if (context !== null) {
+            context.globalCompositeOperation = "destination-over";
+            context.fillStyle = "black";
+            context.fillRect(
+              0,
+              0,
+              drawingCanvas.canvas.width,
+              drawingCanvas.canvas.height
+            );
+            const pngURL = canvas.toDataURL();
+            return pngURL;
+          } else {
+            return "";
+          }
+        } else {
+          return "";
+        }
       } else {
         return "";
       }
+    },
+    dataURItoBlob(dataURI: string) {
+      const byteString = window.atob(dataURI.split(",")[1]);
+      const mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+
+      const bb = new Blob([ab], { type: mimeString });
+      return bb;
+    },
+    imageCanvasToBlob() {
+      const dataURI = this.canvasToDataUrl("image");
+      const blob = this.dataURItoBlob(dataURI);
+      return blob;
+    },
+    drawingCanvasToBlob() {
+      const dataURI = this.canvasToDataUrl("mask");
+      const blob = this.dataURItoBlob(dataURI);
+      return blob;
     },
   };
 })();
 
 export default inpainter;
-
-// 1) stage를 만든다.
-// 2) 이미지를 업로드하면 새로운 레이어를 만든다.
-// 3) 이미지를 업로드하면 새로운 레이어를 만든다,,, X N번
-// 4) 최상단에는 마스킹 용 레이어가 있다(default)
-// 5) 이 뒤에 canvas 크기는 고정인지 아니면 상대적으로 더큰 이미지가 기준이 되는지?
-
-// 추가할 기능
-// - 마스킹 부분 적용 및 따로 추출할 수 있도록 만들기
-// - 모든 메서드에는 return 값이 임의로라도 있어야한다(비동기 처리인 것 같아서 여기에 대한 고려도 필요).
-
-// 궁금한 점
-// - 이 뒤에 canvas 크기는 고정인지 아니면 상대적으로 더큰 이미지가 기준이 되는지?
-// - 마스킹은 그림 그리는 정도로 처리하면 되는지?(brush 크기 조절 기능?)
-// - 최종적으로 canvas의 이미지를 추출하고, masking layer도 이미지로 추출하면 되는지? 데이터 타입은 뭐로 주면 되는지?
