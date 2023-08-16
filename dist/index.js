@@ -175,6 +175,19 @@ var inpainter = (function () {
                         context.globalCompositeOperation = "destination-over";
                         context.fillStyle = "black";
                         context.fillRect(0, 0, drawingCanvas.canvas.width, drawingCanvas.canvas.height);
+                        context.drawImage(canvas, 0, 0);
+                        var imgData = context.getImageData(0, 0, canvas.width, canvas.height);
+                        for (var i = 0; i < imgData.data.length; i += 4) {
+                            var count = imgData.data[i] + imgData.data[i + 1] + imgData.data[i + 2];
+                            var colour = 0;
+                            if (count > 383)
+                                colour = 255;
+                            imgData.data[i] = colour;
+                            imgData.data[i + 1] = colour;
+                            imgData.data[i + 2] = colour;
+                            imgData.data[i + 3] = 255;
+                        }
+                        context.putImageData(imgData, 0, 0);
                         var pngURL = canvas.toDataURL();
                         return pngURL;
                     }
