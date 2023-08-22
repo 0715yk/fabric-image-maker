@@ -1,185 +1,653 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var fabric_1 = require("fabric");
-var inpainter = (function () {
-    var imageStackCanvas = null;
-    var drawingCanvas = {
-        context: null,
-        canvas: null,
-        color: "#FFFFFF",
-        strokeWidth: 15,
+const konva_1 = require("konva");
+const libs_1 = require("./libs");
+const inpainter = (function () {
+    let drawingCanvas = {
+        color: null,
+        strokeWidth: null,
     };
-    var selectedImage = null;
+    let selectedImage = null;
+    let konvaStage = null;
+    let imageLayer = null;
+    let trImageArr = [];
+    let drawingLayer = null;
+    let drawingModeOn = false;
+    let drawingMode = "brush";
+    let isPaint = false;
+    let lineGroup = null;
+    let lastLine = null;
+    let imageId = 0;
     return {
-        createDrawingCanvas: function (id) {
-            var latestPoint = [0, 0];
-            var drawing = false;
-            var canvas = document.querySelector(id);
-            if (canvas !== null) {
-                var context_1 = canvas.getContext("2d");
-                if (context_1 !== null) {
-                    drawingCanvas.context = context_1;
-                    drawingCanvas.canvas = canvas;
-                    var continueStroke_1 = function (newPoint) {
-                        context_1.beginPath();
-                        context_1.moveTo(latestPoint[0], latestPoint[1]);
-                        context_1.strokeStyle = drawingCanvas.color;
-                        context_1.lineWidth = drawingCanvas.strokeWidth;
-                        context_1.lineCap = "round";
-                        context_1.lineJoin = "round";
-                        context_1.lineTo(newPoint[0], newPoint[1]);
-                        context_1.stroke();
-                        latestPoint = newPoint;
-                    };
-                    // Event helpers
-                    var startStroke_1 = function (point) {
-                        drawing = true;
-                        latestPoint = point;
-                    };
-                    // Event handlers
-                    var mouseMove_1 = function (evt) {
-                        if (!drawing) {
-                            return;
-                        }
-                        continueStroke_1([
-                            evt.offsetX,
-                            evt.offsetY,
-                        ]);
-                    };
-                    var mouseDown_1 = function (evt) {
-                        if (drawing) {
-                            return;
-                        }
-                        evt.preventDefault();
-                        canvas.addEventListener("mousemove", mouseMove_1, false);
-                        startStroke_1([evt.offsetX, evt.offsetY]);
-                    };
-                    var mouseEnter = function (evt) {
-                        if (!drawing) {
-                            return;
-                        }
-                        mouseDown_1(evt);
-                    };
-                    var endStroke = function (evt) {
-                        if (!drawing) {
-                            return;
-                        }
-                        drawing = false;
-                        if (evt.currentTarget !== null) {
-                            evt.currentTarget.removeEventListener("mousemove", mouseMove_1, false);
-                        }
-                    };
-                    // event listeners
-                    canvas.addEventListener("mousedown", mouseDown_1, false);
-                    canvas.addEventListener("mouseup", endStroke, false);
-                    canvas.addEventListener("mouseout", endStroke, false);
-                    canvas.addEventListener("mouseenter", mouseEnter, false);
-                    return { canvas: canvas, context: context_1 };
-                }
-                else {
-                    return { canvas: null, context: null };
-                }
+        /**
+         * 이미지 레이어에 하나 이상의 이미지가 올라가 있는 상태에만 작동하는 함수입니다.
+         * 모든 이미지에는 transformer(resizing, rotating 기능) 기능이 포함되는데, 이미지가 아닌 다른 부분을 눌렀을 때 잠시 모든 Transformer를 detach 해주는 함수입니다.
+         * Konva.Stage가 아닌 영역에서 onClick 이벤트를 걸어서 해당 메서드를 써주면 좀 더 자연스러운 UX를 만들 수 있습니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        document.body.addEventListener("click", function (e: MouseEvent) {
+          if (e.target !== null) {
+            const target = e.target as HTMLElement;
+    
+            if (target.parentElement.parentElement !== document.getElementById("app")) {
+              inpainter.detachAllTransformer();
             }
-            return { canvas: null, context: null };
-        },
-        setDrawingMode: function (mode) {
-            if (drawingCanvas.context !== null) {
-                drawingCanvas.context.globalCompositeOperation =
-                    mode === "brush" ? "source-over" : "destination-out";
-            }
-        },
-        setStrokeWidth: function (width) {
-            drawingCanvas.strokeWidth = width;
-        },
-        setBrushColor: function (color) {
-            drawingCanvas.color = color;
-        },
-        createImageCanvas: function (_a) {
-            var id = _a.id, width = _a.width, height = _a.height, backgroundColor = _a.backgroundColor;
-            try {
-                imageStackCanvas = new fabric_1.fabric.Canvas(id, {
-                    backgroundColor: backgroundColor,
-                    preserveObjectStacking: true,
+          }
+        });
+         * ```
+         */
+        detachAllTransformer() {
+            if (trImageArr !== null && imageLayer !== null) {
+                trImageArr.forEach((tr) => {
+                    tr === null || tr === void 0 ? void 0 : tr.detach();
                 });
-                imageStackCanvas.setWidth(width);
-                imageStackCanvas.setHeight(height);
-                return imageStackCanvas;
+                imageLayer.draw();
+            }
+        },
+        /**
+         * KonvaJS의 base가 되는 Stage(=Base Canvas)를 생성 및 리턴합니다. 관련 기능을 실행하기 위해 가장 먼저 실행해야 하는 함수입니다.
+         * 해당 모듈에는 하나의 Ca
+         * 개발자가 작업을 할 때에 이 Stage 리턴값을 가지고 해야할 작업은 특별히 없습니다(직접 접근하기 보다는 모듈에서 제공하는 함수를 쓸 것을 권장합니다).
+         * 만약 null 이 나왔을 경우(모듈 자체에 에러가 있는 경우) 분기처리를 하여 에러 처리를 하기 위한 용도로 리턴값을 만들어놨습니다.
+         *
+         * @alpha
+         * @param canvasInfo - 생성할 Stage(Canvas)와 관련된 정보를 넣어줍니다.
+         * @returns 정상적으로 canvas가 생성됐다면 Konva.Stage 객체가 리턴되고, 아닌 경우 null이 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+          import inpainter from "fabric-image-maker";
+    
+          const stage = inpainter.createBaseKonvaStage({
+            id: "app",
+            width: 900,
+            height: 700,
+            backgroundColor: "skyblue",
+          });
+         * ```
+         */
+        createBaseKonvaStage({ id, width, height, backgroundColor, }) {
+            try {
+                konvaStage = new konva_1.default.Stage({
+                    container: id,
+                    width,
+                    height,
+                });
+                konvaStage.container().style.backgroundColor = backgroundColor;
+                konvaStage.container().style.width = `${width}px`;
+                konvaStage.container().style.height = `${height}px`;
+                konvaStage.container().style.border = "1px solid black";
+                konvaStage.on("mousedown", (e) => {
+                    if (e.target.getClassName() === "Stage" && imageLayer !== null) {
+                        this.detachAllTransformer();
+                        selectedImage = null;
+                    }
+                });
+                return konvaStage;
             }
             catch (e) {
                 console.error(e);
                 return null;
             }
         },
-        addImageLayer: function (src) {
-            (function () {
-                fabric_1.fabric.Image.fromURL(src, function (oImg) {
-                    if (imageStackCanvas !== null) {
-                        oImg.set("left", 0).set("top", 0);
-                        oImg.on("selected", function () {
-                            selectedImage = oImg;
-                        });
-                        imageStackCanvas.add(oImg);
+        /**
+         * imgNode
+         *
+         * @alpha
+         * @param imgNode - 파라미터로 넣어준 Konva.Image node를 제외한 모든 Image Node의 Transformer를 제거하고, 파라미터로 넣어준 노드에만 Transformer를 적용합니다(`addImageLayer`를 통해 Konva.Image node를 return 받을 수 있습니다).
+         * @returns
+         */
+        detachTransformer(imgNode) {
+            if (trImageArr !== null) {
+                trImageArr.forEach((tr) => {
+                    if (tr.id() !== imgNode.id()) {
+                        tr.detach();
+                    }
+                    else {
+                        tr.nodes([imgNode]);
                     }
                 });
-            })();
-        },
-        bringForward: function () {
-            if (selectedImage !== null && imageStackCanvas !== null) {
-                imageStackCanvas.bringForward(selectedImage);
             }
         },
-        bringToFront: function () {
-            if (selectedImage !== null && imageStackCanvas !== null) {
-                imageStackCanvas.bringToFront(selectedImage);
+        /**
+         * 이미지를 업로드할 때 사용하는 메서드 입니다. 이미지를 업로드하는 로직을 작성해놓은 다음에 src 정보를 string 형태로 파라미터로 넣어주면 해당 src의 이미지가 Konva.Stage에 그려집니다.
+         *
+         * @alpha
+         * @param src - Konva.Stage에 그려줄 이미지 src 값을 넣어줍니다.
+         * @returns 정상적으로 image layer가 생성됐다면 Konva.Image 객체가 리턴되고, 아닌 경우 null이 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+        const imageInputElement = document.querySelector(
+          "#imageInput"
+        ) as HTMLInputElement;
+        const uploadBtnElement = document.querySelector(
+          "#uploadBtn"
+        ) as uploadBtnElement;
+    
+        if (uploadBtnElement !== null && imageInputElement !== null) {
+          uploadBtnElement.addEventListener("click", function () {
+            if (imageInputElement.files !== null) {
+              const file = imageInputElement.files[0];
+              const reader = new FileReader();
+              const img = new Image() as HTMLImageElement;
+    
+              reader.readAsDataURL(file);
+              reader.onload = (e) => {
+                if (img !== null && e?.target !== null) {
+                  inpainter.addImageLayer(e.target.result as string);
+                }
+              };
+            }
+          });
+        }
+         * ```
+         */
+        addImageLayer(src) {
+            const uniqueId = imageId++ + "";
+            if (konvaStage !== null) {
+                try {
+                    if (imageLayer === null) {
+                        imageLayer = new konva_1.default.Layer();
+                        konvaStage.add(imageLayer);
+                    }
+                    const imageObj = new Image();
+                    imageObj.src = src;
+                    let result = null;
+                    imageObj.onload = () => {
+                        if (konvaStage === null || imageLayer === null)
+                            return;
+                        const image = new konva_1.default.Image({
+                            image: imageObj,
+                            width: imageObj.width,
+                            height: imageObj.height,
+                            x: 0,
+                            y: 0,
+                            draggable: true,
+                            id: uniqueId,
+                        });
+                        const trImageGroup = new konva_1.default.Group({
+                            name: "trImageGroup",
+                        });
+                        const tr = new konva_1.default.Transformer({ id: uniqueId });
+                        trImageArr.push(tr);
+                        trImageGroup.add(image, tr);
+                        imageLayer.add(trImageGroup);
+                        if (drawingLayer !== null)
+                            drawingLayer === null || drawingLayer === void 0 ? void 0 : drawingLayer.moveToTop();
+                        this.detachTransformer(image);
+                        image.on("mousedown touchstart", (e) => {
+                            e.cancelBubble = true;
+                            if (imageLayer !== null) {
+                                this.detachTransformer(image);
+                                selectedImage = trImageGroup;
+                                imageLayer.draw();
+                            }
+                        });
+                        image.on("mouseover", function () {
+                            document.body.style.cursor = "pointer";
+                        });
+                        image.on("mouseout", function () {
+                            document.body.style.cursor = "default";
+                        });
+                        result = image;
+                    };
+                    return result;
+                }
+                catch (e) {
+                    return null;
+                }
+            }
+            else {
+                return null;
             }
         },
-        bringBack: function () {
-            if (selectedImage !== null && imageStackCanvas !== null) {
-                imageStackCanvas.sendToBack(selectedImage);
+        /**
+         * 현재 선택된 이미지 노드를 한 레벨 앞으로 이동시킵니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const bringForwardBtnElement = document.querySelector(
+          "#bringForwardBtn"
+        ) as HTMLButtonElement;
+    
+        bringForwardBtnElement.addEventListener("click", function () {
+          inpainter.bringForward();
+        });
+         * ```
+         */
+        bringForward() {
+            if (selectedImage !== null) {
+                selectedImage.moveUp();
             }
         },
-        bringToBackward: function () {
-            if (selectedImage !== null && imageStackCanvas !== null) {
-                imageStackCanvas.sendBackwards(selectedImage);
+        /**
+         * 현재 선택된 이미지 노드를 맨 위로 이동시킵니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const bringToFrontBtnElement = document.querySelector(
+          "#bringToFrontBtn"
+        ) as HTMLButtonElement;
+    
+        bringToFrontBtnElement.addEventListener("click", function () {
+          inpainter.bringToFront();
+        });
+         * ```
+         */
+        bringToFront() {
+            if (selectedImage !== null) {
+                selectedImage.moveToTop();
             }
         },
-        deleteImage: function () {
-            if (selectedImage !== null && imageStackCanvas !== null) {
-                imageStackCanvas.remove(selectedImage);
+        /**
+         * 현재 선택된 이미지 노드를 한 맨 뒤로 이동시킵니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const bringToBackBtnElement = document.querySelector(
+          "#sendToBackBtn"
+        ) as HTMLButtonElement;
+    
+        bringToBackBtnElement.addEventListener("click", function () {
+          inpainter.bringBack();
+        });
+         * ```
+         */
+        bringBack() {
+            if (selectedImage !== null) {
+                selectedImage.moveToBottom();
             }
         },
-        cloneCanvas: function (oldCanvas) {
-            var newCanvas = document.createElement("canvas");
-            var context = newCanvas.getContext("2d");
-            newCanvas.width = oldCanvas.width;
-            newCanvas.height = oldCanvas.height;
-            if (context !== null) {
-                context.drawImage(oldCanvas, 0, 0);
+        /**
+         * 현재 선택된 이미지 노드를 한 레벨 뒤로 이동시킵니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const sendBackwardBtnElement = document.querySelector(
+          "#sendBackwardBtn"
+        ) as HTMLButtonElement;
+    
+        sendBackwardBtnElement.addEventListener("click", function () {
+          inpainter.bringToBackward();
+        });
+         * ```
+         */
+        bringToBackward() {
+            if (selectedImage !== null) {
+                selectedImage.moveDown();
             }
-            return { canvas: newCanvas, context: context };
         },
-        canvasToDataUrl: function (type) {
+        /**
+         * 현재 선택된 이미지 노드를 제거합니다.
+         *
+         * @alpha
+         * @param
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const canvasBtn2Element = document.querySelector(
+          "#canvasBtn2"
+        ) as HTMLButtonElement;
+    
+        canvasBtn2Element.addEventListener("click", function () {
+          inpainter.deleteImage();
+        });
+         * ```
+         */
+        deleteImage() {
+            if (selectedImage !== null) {
+                selectedImage.destroy();
+            }
+        },
+        /**
+         * 마스킹 모드가 켜져있는지 아닌지를 리턴해주는 함수입니다.
+         *
+         * @alpha
+         * @param
+         * @returns 현재 masking 모드가 on 상태인지 off 상태인지를 리턴합니다(true/false)
+         *
+         */
+        isDrawingModeOn() {
+            return drawingModeOn;
+        },
+        /**
+         * masking canvas를 생성하는 함수입니다. 'createBaseKonvaStage' 메서드와 마찬가지로 사용하고자 했을 때, 초기에 생성을 해주고 시작해줘야 합니다.
+         * 두번 실행할 시에는 기존의 Layer에 덮어씌워 집니다(= 2개 이상 생성이 불가능합니다).
+         *
+         * @alpha
+         * @param canvasInfo - 초기 color 정보 및 strokeWidth 정보를 입력해줍니다.
+         * @returns 정상적으로 생성 성공시 drawning Konva Layer가 리턴되고, 실패시 null 이 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        inpainter.createDrawingCanvas({ color: "#ffffff", strokeWidth: 60 });
+         * ```
+         */
+        createDrawingCanvas({ color, strokeWidth, }) {
+            try {
+                if (lineGroup === null) {
+                    lineGroup = new konva_1.default.Group({ name: "lineGroup", draggable: false });
+                }
+                if (konvaStage === null)
+                    return null;
+                drawingLayer = new konva_1.default.Layer();
+                konvaStage.add(drawingLayer);
+                drawingCanvas.color = color;
+                drawingCanvas.strokeWidth = strokeWidth;
+                konvaStage.on("mousedown", function () {
+                    var _a, _b, _c, _d, _e, _f;
+                    if (konvaStage === null || !drawingModeOn)
+                        return;
+                    isPaint = true;
+                    const pos = konvaStage.getPointerPosition();
+                    lastLine = new konva_1.default.Line({
+                        stroke: (_a = drawingCanvas.color) !== null && _a !== void 0 ? _a : color,
+                        strokeWidth: (_b = drawingCanvas.strokeWidth) !== null && _b !== void 0 ? _b : strokeWidth,
+                        globalCompositeOperation: drawingMode === "brush" ? "source-over" : "destination-out",
+                        lineCap: "round",
+                        lineJoin: "round",
+                        points: [(_c = pos === null || pos === void 0 ? void 0 : pos.x) !== null && _c !== void 0 ? _c : 0, (_d = pos === null || pos === void 0 ? void 0 : pos.y) !== null && _d !== void 0 ? _d : 0, (_e = pos === null || pos === void 0 ? void 0 : pos.x) !== null && _e !== void 0 ? _e : 0, (_f = pos === null || pos === void 0 ? void 0 : pos.y) !== null && _f !== void 0 ? _f : 0],
+                    });
+                    if (lineGroup !== null && drawingLayer !== null) {
+                        lineGroup.add(lastLine);
+                        drawingLayer.add(lineGroup);
+                    }
+                });
+                konvaStage.on("mouseup", function () {
+                    isPaint = false;
+                });
+                konvaStage.on("mouseleave", () => {
+                    isPaint = false;
+                });
+                konvaStage.on("mousemove", function (e) {
+                    var _a, _b;
+                    if (!isPaint || lastLine === null || konvaStage === null) {
+                        return;
+                    }
+                    e.evt.preventDefault();
+                    const pos = konvaStage.getPointerPosition();
+                    const newPoints = lastLine
+                        .points()
+                        .concat([(_a = pos === null || pos === void 0 ? void 0 : pos.x) !== null && _a !== void 0 ? _a : 0, (_b = pos === null || pos === void 0 ? void 0 : pos.y) !== null && _b !== void 0 ? _b : 0]);
+                    lastLine.points(newPoints);
+                });
+                return drawingLayer;
+            }
+            catch (e) {
+                console.error(e);
+                return null;
+            }
+        },
+        /**
+         * 마스킹 모드를 on/off 해주는 함수 입니다.
+         *
+         * @alpha
+         * @param
+         * @returns 현재 masking 모드가 on 상태인지 off 상태인지를 리턴합니다(true/false)
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const maskingBtnElement = document.querySelector(
+          "#maskingBtn"
+        ) as HTMLButtonElement;
+    
+        maskingBtnElement.addEventListener("click", function () {
+          const nowModeOn = inpainter.activateDrawingMode();
+          if (nowModeOn) {
+            maskingBtnElement.style.background = "green";
+            maskingBtnElement.textContent = "masking mode status : on";
+          } else {
+            maskingBtnElement.style.background = "red";
+            maskingBtnElement.textContent = "masking mode status : off";
+          }
+        });
+         * ```
+         */
+        activateDrawingMode() {
+            if (!drawingModeOn && konvaStage !== null) {
+                imageLayer === null || imageLayer === void 0 ? void 0 : imageLayer.listening(false);
+                lineGroup === null || lineGroup === void 0 ? void 0 : lineGroup.show();
+                drawingLayer === null || drawingLayer === void 0 ? void 0 : drawingLayer.moveToTop();
+                this.detachAllTransformer();
+                if (drawingCanvas.strokeWidth !== null && drawingCanvas.color !== null)
+                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
+            }
+            else {
+                if (drawingCanvas.strokeWidth !== null &&
+                    drawingCanvas.color !== null &&
+                    konvaStage !== null)
+                    konvaStage.container().style.cursor = "default";
+                imageLayer === null || imageLayer === void 0 ? void 0 : imageLayer.listening(true);
+                lineGroup === null || lineGroup === void 0 ? void 0 : lineGroup.hide();
+            }
+            drawingModeOn = !drawingModeOn;
+            return drawingModeOn;
+        },
+        /**
+         * masking mode 중에 brush 모드로 그릴지, eraser 모드로 지울지를 선택하는 함수입니다.
+         * 파라미터에 'brush', 'eraser' 값을 넣어줌으로써 사용할 수 있습니다.
+         *
+         * @alpha
+         * @param mode - brush 모드를 할지, eraser 모드를 할지 선택하여 입력(두 개의 모드만 지원하며 다른 파라미터를 넣으면 동작하지 않습니다).
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const select = document.querySelector("#selection");
+    
+        if (select !== null) {
+          select.addEventListener("change", function (e) {
+            const mode = (e.target as HTMLTextAreaElement).value;
+            inpainter.setDrawingMode(mode);
+          });
+        }
+         * ```
+         */
+        setDrawingMode(mode) {
+            drawingMode = mode;
+            if (mode === "eraser") {
+                if (konvaStage !== null &&
+                    drawingCanvas.color !== null &&
+                    drawingCanvas.strokeWidth !== null &&
+                    drawingModeOn) {
+                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, "#044B94");
+                }
+            }
+            else if (mode === "brush") {
+                if (konvaStage !== null &&
+                    drawingCanvas.color !== null &&
+                    drawingCanvas.strokeWidth !== null &&
+                    drawingModeOn) {
+                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingCanvas.color);
+                }
+            }
+        },
+        /**
+         * masking mode의 brush 크기인 stroke width를 조절하는 함수입니다.
+         * 파라미터에 width값을(number type) 넣어줌으로써 사용할 수 있습니다.
+         *
+         * @alpha
+         * @param width - stroke width를 넣어줍니다.
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const pixelInput = document.querySelector("#pixelInput") as HTMLInputElement;
+        
+        pixelInput.addEventListener("change", function () {
+          inpainter.setStrokeWidth(parseInt(pixelInput.value));
+        });
+         * ```
+         */
+        setStrokeWidth(width) {
+            drawingCanvas.strokeWidth = width;
+            if (konvaStage !== null &&
+                drawingCanvas.color !== null &&
+                drawingModeOn) {
+                konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(width, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
+            }
+        },
+        /**
+         * masking mode의 brush color를 조절하는 함수입니다(지우개 컬러는 조절 불가).
+         * 파라미터에 color(string type) 넣어줌으로써 사용할 수 있습니다.
+         *
+         * @alpha
+         * @param color - color 값을 넣어줍니다.
+         * @returns
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const colorSelect = document.querySelector("#colorSelection");
+    
+        if (colorSelect !== null) {
+          colorSelect.addEventListener("change", function (e) {
+            const color = (e.target as HTMLTextAreaElement).value;
+            inpainter.setStrokeColor(color);
+          });
+        }
+         * ```
+         */
+        setStrokeColor(color) {
+            drawingCanvas.color = color;
+            if (konvaStage !== null &&
+                drawingCanvas.strokeWidth !== null &&
+                drawingModeOn) {
+                konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : color);
+            }
+        },
+        /**
+         * image layer or masking layer를 선택하여 파라미터에 입력해주면 이를 바탕으로 실제 Konva Layer를 url 형식의(string) 데이터로 리턴합니다.
+         * 파라미터에 image or mask(string type) 타입을 정해서 넣어줌으로써 사용할 수 있습니다.
+         *
+         * @alpha
+         * @param type - "image" or "mask" (다른 parameter는 동작하지 않고 ""를 리턴합니다.)
+         * @returns 정상적으로 리턴되면 dataURL 값이 string으로 리턴되고, 실패시엔 "" 가 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const mergeBtnElement = document.querySelector(
+          "#mergeBtn"
+        ) as HTMLButtonElement;
+    
+        mergeBtnElement.addEventListener("click", function () {
+          const mergedImageElement = document.querySelector(
+            "#merged_image"
+          ) as HTMLImageElement;
+          const url = inpainter.canvasToDataUrl("image");
+          mergedImageElement.src = url;
+          mergedImageElement.style.border = "1px solid black";
+        });
+         * ```
+         */
+        canvasToDataUrl(type) {
             if (type === "image") {
-                if (imageStackCanvas !== null) {
-                    var pngURL = imageStackCanvas.toDataURL();
-                    return pngURL;
+                if (imageLayer !== null && konvaStage !== null) {
+                    if (selectedImage !== null) {
+                        if (selectedImage.children) {
+                            const tr = selectedImage.children[1];
+                            const image = selectedImage.children[0];
+                            tr.detach();
+                            const pngURL = imageLayer.toDataURL();
+                            tr.nodes([image]);
+                            return pngURL;
+                        }
+                        else {
+                            return "";
+                        }
+                    }
+                    else {
+                        const pngURL = imageLayer.toDataURL();
+                        return pngURL;
+                    }
                 }
                 else {
                     return "";
                 }
             }
             else if (type === "mask") {
-                if (drawingCanvas.canvas !== null && drawingCanvas.context !== null) {
-                    var _a = this.cloneCanvas(drawingCanvas.canvas), canvas = _a.canvas, context = _a.context;
+                if (konvaStage === null)
+                    return "";
+                // 가상의 div element를 만들어서 새로운 konva stage에 바인딩시켜준다.
+                const divElement = document.createElement("div");
+                divElement.style.display = "none";
+                divElement.id = "$#%-masking-container-of-inpainter-$#";
+                document.body.appendChild(divElement);
+                let newKonvaStage = new konva_1.default.Stage({
+                    container: "$#%-masking-container-of-inpainter-$#",
+                    width: konvaStage.toCanvas().width,
+                    height: konvaStage.toCanvas().height,
+                });
+                if (!lineGroup || !newKonvaStage)
+                    return "";
+                newKonvaStage.container().style.backgroundColor = "black";
+                newKonvaStage.container().style.width = `${900}px`;
+                newKonvaStage.container().style.height = `${700}px`;
+                // 새로 만든 Konva Stage에 마스킹한 부분을 레이어로 쌓고, canvas로 컨버팅해준다.
+                const layer = new konva_1.default.Layer();
+                layer.add(lineGroup.clone());
+                newKonvaStage.add(layer);
+                const drawingCanvas = newKonvaStage.toCanvas();
+                newKonvaStage = null;
+                divElement.remove();
+                // 캔버스로 컨버팅을 마쳤으면 anti-aliasing을 모든 색을 흰색, 검정색 조합으로 바꿔주는 방향으로 해결한다.
+                if (drawingCanvas !== undefined) {
+                    const context = drawingCanvas.getContext("2d");
                     if (context !== null) {
                         context.globalCompositeOperation = "destination-over";
                         context.fillStyle = "black";
-                        context.fillRect(0, 0, drawingCanvas.canvas.width, drawingCanvas.canvas.height);
-                        context.drawImage(canvas, 0, 0);
-                        var imgData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        for (var i = 0; i < imgData.data.length; i += 4) {
-                            var count = imgData.data[i] + imgData.data[i + 1] + imgData.data[i + 2];
-                            var colour = 0;
+                        context.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                        context.drawImage(drawingCanvas, 0, 0);
+                        const imgData = context.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height);
+                        for (let i = 0; i < imgData.data.length; i += 4) {
+                            const count = imgData.data[i] + imgData.data[i + 1] + imgData.data[i + 2];
+                            let colour = 0;
                             if (count > 383)
                                 colour = 255;
                             imgData.data[i] = colour;
@@ -188,7 +656,7 @@ var inpainter = (function () {
                             imgData.data[i + 3] = 255;
                         }
                         context.putImageData(imgData, 0, 0);
-                        var pngURL = canvas.toDataURL();
+                        const pngURL = drawingCanvas.toDataURL();
                         return pngURL;
                     }
                     else {
@@ -203,25 +671,60 @@ var inpainter = (function () {
                 return "";
             }
         },
-        dataURItoBlob: function (dataURI) {
-            var byteString = window.atob(dataURI.split(",")[1]);
-            var mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
-            var ab = new ArrayBuffer(byteString.length);
-            var ia = new Uint8Array(ab);
-            for (var i = 0; i < byteString.length; i++) {
-                ia[i] = byteString.charCodeAt(i);
-            }
-            var bb = new Blob([ab], { type: mimeString });
-            return bb;
-        },
-        imageCanvasToBlob: function () {
-            var dataURI = this.canvasToDataUrl("image");
-            var blob = this.dataURItoBlob(dataURI);
+        /**
+         * image layer 를 blob 데이터 형태로 반환합니다.
+         *
+         * @alpha
+         * @param
+         * @returns 정상적으로 리턴되면 blob 데이터가 리턴되고, 실패시엔 null이 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const getBlobBtnElement = document.querySelector(
+          "#getBlobBtn"
+        ) as HTMLButtonElement;
+    
+        getBlobBtnElement.addEventListener("click", function () {
+          const response = inpainter.imageCanvasToBlob();
+          console.log(response);
+        });
+         * ```
+         */
+        imageCanvasToBlob() {
+            const dataURI = this.canvasToDataUrl("image");
+            if (dataURI === "")
+                return null;
+            const blob = (0, libs_1.dataURItoBlob)(dataURI);
             return blob;
         },
-        drawingCanvasToBlob: function () {
-            var dataURI = this.canvasToDataUrl("mask");
-            var blob = this.dataURItoBlob(dataURI);
+        /**
+         * masking layer 를 blob 데이터 형태로 반환합니다.
+         *
+         * @alpha
+         * @param
+         * @returns 정상적으로 리턴되면 blob 데이터가 리턴되고, 실패시엔 null이 리턴됩니다.
+         *
+         * @example
+         * ```typescript
+        import inpainter from "fabric-image-maker";
+    
+        const getMaskingBlobBtnElement = document.querySelector(
+          "#getMaskingBlobBtn"
+        ) as HTMLButtonElement;
+    
+        getMaskingBlobBtnElement.addEventListener("click", function () {
+          const response = inpainter.drawingCanvasToBlob();
+          console.log(response);
+        });
+         * ```
+         */
+        drawingCanvasToBlob() {
+            const dataURI = this.canvasToDataUrl("mask");
+            if (dataURI === "")
+                return null;
+            const blob = (0, libs_1.dataURItoBlob)(dataURI);
             return blob;
         },
     };
