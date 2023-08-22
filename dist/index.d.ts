@@ -11,7 +11,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     document.body.addEventListener("click", function (e: MouseEvent) {
       if (e.target !== null) {
@@ -37,7 +37,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-      import inpainter from "fabric-image-maker";
+      import inpainter from "konva-image-maker";
 
       const stage = inpainter.createBaseKonvaStage({
         id: "app",
@@ -105,7 +105,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const bringForwardBtnElement = document.querySelector(
       "#bringForwardBtn"
@@ -126,7 +126,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const bringToFrontBtnElement = document.querySelector(
       "#bringToFrontBtn"
@@ -147,7 +147,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const bringToBackBtnElement = document.querySelector(
       "#sendToBackBtn"
@@ -168,7 +168,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const sendBackwardBtnElement = document.querySelector(
       "#sendBackwardBtn"
@@ -189,7 +189,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const canvasBtn2Element = document.querySelector(
       "#canvasBtn2"
@@ -210,6 +210,10 @@ declare const inpainter: {
      *
      */
     isDrawingModeOn(): boolean;
+    getRelativePointerPosition(node: Konva.Stage): {
+        x: number;
+        y: number;
+    } | null;
     /**
      * masking canvas를 생성하는 함수입니다. 'createBaseKonvaStage' 메서드와 마찬가지로 사용하고자 했을 때, 초기에 생성을 해주고 시작해줘야 합니다.
      * 두번 실행할 시에는 기존의 Layer에 덮어씌워 집니다(= 2개 이상 생성이 불가능합니다).
@@ -220,7 +224,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     inpainter.createDrawingCanvas({ color: "#ffffff", strokeWidth: 60 });
      * ```
@@ -238,7 +242,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const maskingBtnElement = document.querySelector(
       "#maskingBtn"
@@ -267,7 +271,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const select = document.querySelector("#selection");
 
@@ -290,7 +294,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const pixelInput = document.querySelector("#pixelInput") as HTMLInputElement;
     
@@ -310,7 +314,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const colorSelect = document.querySelector("#colorSelection");
 
@@ -333,7 +337,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const mergeBtnElement = document.querySelector(
       "#mergeBtn"
@@ -359,7 +363,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const getBlobBtnElement = document.querySelector(
       "#getBlobBtn"
@@ -381,7 +385,7 @@ declare const inpainter: {
      *
      * @example
      * ```typescript
-    import inpainter from "fabric-image-maker";
+    import inpainter from "konva-image-maker";
 
     const getMaskingBlobBtnElement = document.querySelector(
       "#getMaskingBlobBtn"
@@ -394,5 +398,25 @@ declare const inpainter: {
      * ```
      */
     drawingCanvasToBlob(): null | Blob;
+    /**
+     * 현재 zoom의 배율을 리턴합니다.
+     *
+     * @alpha
+     * @param
+     * @returns 정상적으로 리턴되면 배율 데이터가 리턴되고, 실패시엔 null이 리턴됩니다.
+     *
+     * @example
+     * ```typescript
+    import inpainter from "konva-image-maker";
+
+    const spanElement = document.querySelector("#zoom");
+    document.body.addEventListener("wheel", function () {
+      if (spanElement !== null) {
+        spanElement.textContent = String(inpainter.getZoomScale() ?? 0);
+      }
+    });
+     * ```
+     */
+    getZoomScale(): number | null;
 };
 export default inpainter;
