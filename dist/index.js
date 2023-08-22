@@ -1,7 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const konva_1 = require("konva");
-const libs_1 = require("./libs");
+import Konva from "konva";
+import { getDrawCursor, dataURItoBlob } from "./libs";
 const inpainter = (function () {
     let drawingCanvas = {
         color: null,
@@ -75,7 +73,7 @@ const inpainter = (function () {
          */
         createBaseKonvaStage({ id, width, height, backgroundColor, }) {
             try {
-                konvaStage = new konva_1.default.Stage({
+                konvaStage = new Konva.Stage({
                     container: id,
                     width,
                     height,
@@ -155,7 +153,7 @@ const inpainter = (function () {
             if (konvaStage !== null) {
                 try {
                     if (imageLayer === null) {
-                        imageLayer = new konva_1.default.Layer();
+                        imageLayer = new Konva.Layer();
                         konvaStage.add(imageLayer);
                     }
                     const imageObj = new Image();
@@ -164,7 +162,7 @@ const inpainter = (function () {
                     imageObj.onload = () => {
                         if (konvaStage === null || imageLayer === null)
                             return;
-                        const image = new konva_1.default.Image({
+                        const image = new Konva.Image({
                             image: imageObj,
                             width: imageObj.width,
                             height: imageObj.height,
@@ -173,10 +171,10 @@ const inpainter = (function () {
                             draggable: true,
                             id: uniqueId,
                         });
-                        const trImageGroup = new konva_1.default.Group({
+                        const trImageGroup = new Konva.Group({
                             name: "trImageGroup",
                         });
-                        const tr = new konva_1.default.Transformer({ id: uniqueId });
+                        const tr = new Konva.Transformer({ id: uniqueId });
                         trImageArr.push(tr);
                         trImageGroup.add(image, tr);
                         imageLayer.add(trImageGroup);
@@ -363,11 +361,11 @@ const inpainter = (function () {
         createDrawingCanvas({ color, strokeWidth, }) {
             try {
                 if (lineGroup === null) {
-                    lineGroup = new konva_1.default.Group({ name: "lineGroup", draggable: false });
+                    lineGroup = new Konva.Group({ name: "lineGroup", draggable: false });
                 }
                 if (konvaStage === null)
                     return null;
-                drawingLayer = new konva_1.default.Layer();
+                drawingLayer = new Konva.Layer();
                 konvaStage.add(drawingLayer);
                 drawingCanvas.color = color;
                 drawingCanvas.strokeWidth = strokeWidth;
@@ -377,7 +375,7 @@ const inpainter = (function () {
                         return;
                     isPaint = true;
                     const pos = konvaStage.getPointerPosition();
-                    lastLine = new konva_1.default.Line({
+                    lastLine = new Konva.Line({
                         stroke: (_a = drawingCanvas.color) !== null && _a !== void 0 ? _a : color,
                         strokeWidth: (_b = drawingCanvas.strokeWidth) !== null && _b !== void 0 ? _b : strokeWidth,
                         globalCompositeOperation: drawingMode === "brush" ? "source-over" : "destination-out",
@@ -449,7 +447,7 @@ const inpainter = (function () {
                 drawingLayer === null || drawingLayer === void 0 ? void 0 : drawingLayer.moveToTop();
                 this.detachAllTransformer();
                 if (drawingCanvas.strokeWidth !== null && drawingCanvas.color !== null)
-                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
+                    konvaStage.container().style.cursor = getDrawCursor(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
             }
             else {
                 if (drawingCanvas.strokeWidth !== null &&
@@ -491,7 +489,7 @@ const inpainter = (function () {
                     drawingCanvas.color !== null &&
                     drawingCanvas.strokeWidth !== null &&
                     drawingModeOn) {
-                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, "#044B94");
+                    konvaStage.container().style.cursor = getDrawCursor(drawingCanvas.strokeWidth, "#044B94");
                 }
             }
             else if (mode === "brush") {
@@ -499,7 +497,7 @@ const inpainter = (function () {
                     drawingCanvas.color !== null &&
                     drawingCanvas.strokeWidth !== null &&
                     drawingModeOn) {
-                    konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingCanvas.color);
+                    konvaStage.container().style.cursor = getDrawCursor(drawingCanvas.strokeWidth, drawingCanvas.color);
                 }
             }
         },
@@ -527,7 +525,7 @@ const inpainter = (function () {
             if (konvaStage !== null &&
                 drawingCanvas.color !== null &&
                 drawingModeOn) {
-                konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(width, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
+                konvaStage.container().style.cursor = getDrawCursor(width, drawingMode === "eraser" ? "#044B94" : drawingCanvas.color);
             }
         },
         /**
@@ -557,7 +555,7 @@ const inpainter = (function () {
             if (konvaStage !== null &&
                 drawingCanvas.strokeWidth !== null &&
                 drawingModeOn) {
-                konvaStage.container().style.cursor = (0, libs_1.getDrawCursor)(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : color);
+                konvaStage.container().style.cursor = getDrawCursor(drawingCanvas.strokeWidth, drawingMode === "eraser" ? "#044B94" : color);
             }
         },
         /**
@@ -619,7 +617,7 @@ const inpainter = (function () {
                 divElement.style.display = "none";
                 divElement.id = "$#%-masking-container-of-inpainter-$#";
                 document.body.appendChild(divElement);
-                let newKonvaStage = new konva_1.default.Stage({
+                let newKonvaStage = new Konva.Stage({
                     container: "$#%-masking-container-of-inpainter-$#",
                     width: konvaStage.toCanvas().width,
                     height: konvaStage.toCanvas().height,
@@ -630,7 +628,7 @@ const inpainter = (function () {
                 newKonvaStage.container().style.width = `${900}px`;
                 newKonvaStage.container().style.height = `${700}px`;
                 // 새로 만든 Konva Stage에 마스킹한 부분을 레이어로 쌓고, canvas로 컨버팅해준다.
-                const layer = new konva_1.default.Layer();
+                const layer = new Konva.Layer();
                 layer.add(lineGroup.clone());
                 newKonvaStage.add(layer);
                 const drawingCanvas = newKonvaStage.toCanvas();
@@ -696,7 +694,7 @@ const inpainter = (function () {
             const dataURI = this.canvasToDataUrl("image");
             if (dataURI === "")
                 return null;
-            const blob = (0, libs_1.dataURItoBlob)(dataURI);
+            const blob = dataURItoBlob(dataURI);
             return blob;
         },
         /**
@@ -724,9 +722,9 @@ const inpainter = (function () {
             const dataURI = this.canvasToDataUrl("mask");
             if (dataURI === "")
                 return null;
-            const blob = (0, libs_1.dataURItoBlob)(dataURI);
+            const blob = dataURItoBlob(dataURI);
             return blob;
         },
     };
 })();
-exports.default = inpainter;
+export default inpainter;

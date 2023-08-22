@@ -1,7 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.dataURItoBlob = exports.getDrawCursor = void 0;
-function getDrawCursor(strokeWidth, brushColor) {
+export function getDrawCursor(strokeWidth, brushColor) {
     const circle = `
     <svg
       height="${strokeWidth}"
@@ -19,8 +16,7 @@ function getDrawCursor(strokeWidth, brushColor) {
   `;
     return `url(data:image/svg+xml;base64,${window.btoa(circle)}) ${Math.ceil(strokeWidth / 2)} ${Math.ceil(strokeWidth / 2)}, pointer`;
 }
-exports.getDrawCursor = getDrawCursor;
-function dataURItoBlob(dataURI) {
+export function dataURItoBlob(dataURI) {
     const byteString = window.atob(dataURI.split(",")[1]);
     const mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
     const ab = new ArrayBuffer(byteString.length);
@@ -31,4 +27,3 @@ function dataURItoBlob(dataURI) {
     const bb = new Blob([ab], { type: mimeString });
     return bb;
 }
-exports.dataURItoBlob = dataURItoBlob;
