@@ -1,5 +1,5 @@
 {
-  "name": "fabric-image-maker",
+  "name": "konva-image-maker",
   "version": "0.0.8",
   "description": "for making stacking images and getting masked canvas easy",
   "main": "dist/index.js",
